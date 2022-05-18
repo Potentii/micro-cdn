@@ -1,0 +1,26 @@
+{
+	"name": "micro-cdn",
+	"version": "1.0.0",
+	"description": "A simple CDN service",
+	"type": "module",
+	"scripts": {
+		"start": "node ./main.mjs"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/Potentii/micro-cdn.git"
+	},
+	"bugs": {
+		"url": "https://github.com/Potentii/micro-cdn/issues"
+	},
+	"homepage": "https://github.com/Potentii/micro-cdn",
+	"dependencies": {
+		"@potentii/logger-js": "1.0.4",
+		"@potentii/rest-envelopes": "1.0.2",
+		"@potentii/type-utils": "1.0.1",
+		"cors": "2.8.5",
+		"express": "4.17.1",
+		"mime": "3.0.0",
+		"uuid": "8.3.2"
+	}
+}
