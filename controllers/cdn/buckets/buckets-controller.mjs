@@ -40,6 +40,42 @@ export default class BucketsController {
 		});
 
 
+		router.get(`/buckets`, async (req, res, next) => {
+			try {
+				const cdnData = await CdnDataRepo.get();
+
+				res.status(200).json(ResponseEnvelope.withData(cdnData.buckets)).end();
+			} catch (err){
+				Logger.error(`GET_BUCKETS:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:process.env.ROOT_PATH });
+				res.status(500)
+					.json(ResponseEnvelope.withError(ApiError.create(`UNKNOWN_ERROR`, `Unknown error`, [])))
+					.end();
+			}
+		});
+
+
+
+		router.get(`/buckets/:bucketId`, async (req, res, next) => {
+			const bucketId = res.locals.bucketId;
+
+			try {
+				const cdnData = await CdnDataRepo.get();
+				const bucket = cdnData.getBucketById(bucketId);
+				if(!bucket || bucket.markedToDeletion)
+					return res.status(404)
+						.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The bucket "${bucketId}" could not be found`, [])))
+						.end();
+
+				res.status(200).json(ResponseEnvelope.withData(bucket)).end();
+			} catch (err){
+				Logger.error(`GET_BUCKET:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:process.env.ROOT_PATH });
+				res.status(500)
+					.json(ResponseEnvelope.withError(ApiError.create(`UNKNOWN_ERROR`, `Unknown error`, [])))
+					.end();
+			}
+		});
+
+
 
 		router.delete(`/buckets/:bucketId`, async (req, res, next) => {
 			const bucketId = res.locals.bucketId;
@@ -48,13 +84,13 @@ export default class BucketsController {
 				const cdnData = await CdnDataRepo.get();
 				const bucket = cdnData.getBucketById(bucketId);
 				if(!bucket || bucket.markedToDeletion)
-					return res.status(200).end();
+					return res.status(204).end();
 
 				bucket.markedToDeletion = true;
 
 				await CdnDataRepo.save(cdnData);
 
-				res.status(200).end();
+				res.status(204).end();
 
 			} catch (err){
 				Logger.error(`DELETE_BUCKET:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:process.env.ROOT_PATH, bucketId:bucketId });
@@ -65,7 +101,7 @@ export default class BucketsController {
 		});
 
 
-		router.post(`/buckets`, async (req, res, next) => {
+		router.post(`/buckets`, express.json(), async (req, res, next) => {
 			try{
 				const reqEnvelope = RequestEnvelope.from(req.body);
 				const dto = CreateBucketDto.from(reqEnvelope.data);
@@ -92,7 +128,7 @@ export default class BucketsController {
 
 				await CdnDataRepo.save(cdnData);
 
-				res.status(201).end();
+				res.status(201).json(ResponseEnvelope.withData(dto)).end();
 
 			} catch(err){
 				Logger.error(`CREATE_BUCKET:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:process.env.ROOT_PATH, body:req.params.body });

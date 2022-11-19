@@ -1,11 +1,10 @@
 import fs from 'fs/promises';
 import fsOld from 'fs';
 import path from 'path';
-import express from 'express';
 import Logger from "../../../../utils/logger.mjs";
 import mime from "mime";
 import CdnDataRepo from "../../../../repositories/cdn-data-repo.mjs";
-import {ApiError, ResponseEnvelope} from "@potentii/rest-envelopes";
+import {ApiError, ApiErrorDetail, ResponseEnvelope} from "@potentii/rest-envelopes";
 import BucketFile from "../../../../model/bucket-file.mjs";
 
 
@@ -19,7 +18,7 @@ export default class FilesController {
 	 */
 	static async setup(router){
 
-		router.use(express.urlencoded({ limit: '20gb', extended: true }));
+		// router.use(express.urlencoded({ limit: '20gb', extended: true }));
 
 
 		router.get(`/files/:fileId`, async (req, res, next) => {
@@ -145,35 +144,30 @@ export default class FilesController {
 						.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The bucket "${bucketId}" could not be found`, [])))
 						.end();
 
-				const content = req.body.content;
-
-				const match = /^data:(?<mimeType>.+?\/.+?);base64,(?<base64>.*)$/i.exec(content);
-
-				const mimeType = match?.groups?.mimeType?.toLowerCase?.();
-				if(!mimeType || !mimeType.trim().length)
+				const mimeType = req.get('Content-Type');
+				if(!mimeType)
 					return res.status(400)
-						.json(ResponseEnvelope.withError(ApiError.create(`INVALID_BASE64`, `Invalid base64 content`, [])))
+						.json(ResponseEnvelope.withError(ApiError.create(`INVALID_REQUEST`, `The request is not valid`, [ApiErrorDetail.create(`MISSING_CONTENT_TYPE`, `The content type must be set`, `headers:Content-Type`, mimeType)])))
 						.end();
 
-				const extension = mime.getExtension(mimeType)?.toLowerCase?.()?.replace?.('.', '');
-				if(!extension || !extension.trim().length)
-					return res.status(400)
-						.json(ResponseEnvelope.withError(ApiError.create(`INVALID_BASE64`, `Invalid base64 content`, [])))
-						.end();
-
-				const base64 = match?.groups?.base64;
-				if(!base64 || !base64.trim().length)
-					return res.status(400)
-						.json(ResponseEnvelope.withError(ApiError.create(`INVALID_BASE64`, `Invalid base64 content`, [])))
+				const extension = mime.getExtension(mimeType);
+				if(!extension)
+					return res.status(422)
+						.json(ResponseEnvelope.withError(ApiError.create(`INVALID_REQUEST`, `The request is not valid`, [ApiErrorDetail.create(`INVALID_MIME_TYPE`, `The mime type is not valid`, `headers:X-Mime-Type`, mimeType)])))
 						.end();
 
 				const fileId = bucket.generateNewFileId(extension);
-
 				const filePath = path.join(process.env.ROOT_PATH, `./buckets`, bucketId, fileId);
 
-				const base64Buffer = new Buffer(base64, 'base64');
+				const newFileWriteStream = fsOld.createWriteStream(filePath);
 
-				await fs.writeFile(filePath, base64Buffer);
+				req.pipe(newFileWriteStream);
+
+				await new Promise((resolve, reject) => {
+					req.once('end', () => resolve());
+					req.once('error', err => reject(err));
+					newFileWriteStream.once('error', err => reject(err));
+				});
 
 				const file = new BucketFile(fileId, bucketId, extension, mimeType, false);
 				bucket.addFile(file);
