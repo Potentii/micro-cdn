@@ -74,6 +74,7 @@ export default class FilesController {
 
 
 				stream.on('open', () => {
+					Logger.info(`GET_FILE:READ_START`, `Started to read/stream a file`, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId });
 					stream.pipe(res);
 				});
 				stream.on('error', err => {
@@ -105,18 +106,24 @@ export default class FilesController {
 				const cdnData = await CdnDataRepo.get();
 
 				const bucket = cdnData.getBucketById(bucketId);
-				if(!bucket || bucket.markedToDeletion)
-					return res.status(200).end();
+				if(!bucket || bucket.markedToDeletion) {
+					Logger.info(`DELETE_FILE:FINISHED_BUCKET_NOT_AVAILABLE`, `The file's bucket was already deleted or could not be found`, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId });
+					return res.status(204).end();
+				}
 
 				const file = bucket.getFileById(fileId);
-				if(!file || file.markedToDeletion)
-					return res.status(200).end();
+				if(!file || file.markedToDeletion) {
+					Logger.info(`DELETE_FILE:FINISHED_FILE_NOT_AVAILABLE`, `The file was already deleted or could not be found`, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId });
+					return res.status(204).end();
+				}
 
 				file.markedToDeletion = true;
 
 				await CdnDataRepo.save(cdnData);
 
-				res.status(200).end();
+				Logger.info(`DELETE_FILE:FINISHED`, `Deleted existing file successfully`, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId });
+
+				res.status(204).end();
 			} catch(err){
 				Logger.error(`DELETE_FILE:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId });
 				res.status(500)
@@ -171,6 +178,8 @@ export default class FilesController {
 				const file = new BucketFile(fileId, bucketId, extension, mimeType, false);
 				bucket.addFile(file);
 				await CdnDataRepo.save(cdnData);
+
+				Logger.info(`CREATE_FILE:FINISHED`, `Created file successfully`, { rootPath:process.env.ROOT_PATH, bucketId:bucketId, fileId:fileId, file:file });
 
 				return res.status(201)
 					.json(ResponseEnvelope.withData(file))
