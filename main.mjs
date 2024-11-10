@@ -6,6 +6,7 @@ import Logger from "./utils/logger.mjs";
 import {ApiError, ResponseEnvelope} from "@potentii/rest-envelopes";
 import process from "node:process";
 import Joi from "joi";
+import cookieParser from "cookie-parser";
 
 
 process.on('uncaughtException', (err, origin) => {
@@ -15,6 +16,7 @@ process.on('uncaughtException', (err, origin) => {
 
 // *Validating the environment:
 Joi.assert(process.env.PORT, Joi.number().required().min(0).label('$env.PORT'));
+Joi.assert(process.env.CORS_ALLOW_ORIGINS, Joi.string().required().label('$env.CORS_ALLOW_ORIGINS'));
 Joi.assert(process.env.TOKEN_PUBLIC_KEY, Joi.string().required().label('$env.TOKEN_PUBLIC_KEY'));
 
 if(!process.env.TOKEN_PUBLIC_KEY.startsWith('-----BEGIN PUBLIC KEY-----'))
@@ -30,7 +32,27 @@ const app = express();
 const httpServer = createServer(app);
 
 
-app.use(cors());
+app.use(cors({
+	credentials: true,
+	origin: process.env.CORS_ALLOW_ORIGINS.split(','),
+}));
+
+
+app.use(cookieParser());
+app.use('*', (req, res, next) => {
+	if(req.cookies && req.headers &&
+		!Object.prototype.hasOwnProperty.call(req.headers, 'authorization') &&
+		Object.prototype.hasOwnProperty.call(req.cookies, 'token') &&
+		req.cookies.token.length > 0
+	) {
+		req.headers.authorization = 'Bearer ' + req.cookies.token.slice(0, req.cookies.token.length);
+	}
+	next();
+});
+
+
+
+
 
 const rootRouter = new express.Router();
 

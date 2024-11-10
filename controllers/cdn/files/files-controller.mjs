@@ -29,12 +29,15 @@ export default class FilesController {
 		router.use(expressjwt({ ...withToken() }));
 
 
-		router.get(`/files/:fileId`, async (req, res, next) => {
-			const fileId = path.join(req.params.fileId);
+		const FILE_ID_REGEX = /^[-_\w\/\\.]+$/i;
+
+
+		router.get(`/files/*`, async (req, res, next) => {
+			const fileId = req.path.replace(/^\/files\//i, '');
 
 			try{
 
-				Joi.assert(fileId, Joi.string().required().regex(/^[\w\/\\.]+$/i).label(`$path.fileId`));
+				Joi.assert(fileId, Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId`));
 
 				const found = await db(req.auth.location)
 					.select()
@@ -120,8 +123,8 @@ export default class FilesController {
 		});
 
 
-		router.delete(`/files/:fileId`, async (req, res, next) => {
-			const fileId = path.join(req.params.fileId);
+		router.delete(`/files/*`, async (req, res, next) => {
+			const fileId = req.path.replace(/^\/files\//i, '');
 
 			try{
 				const now = new Date().getTime();
@@ -149,11 +152,11 @@ export default class FilesController {
 		});
 
 
-		router.post(`/files/:fileId`, async (req, res, next) => {
-			const fileId = path.join(req.params.fileId);
+		router.post(`/files/*`, async (req, res, next) => {
+			const fileId = req.path.replace(/^\/files\//i, '');
 
 			try{
-				Joi.assert(fileId, Joi.string().required().regex(/^[\w\/\\.]+$/i).label(`$path.fileId`));
+				Joi.assert(fileId, Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId`));
 
 
 				const filePath = path.join(getCdnPathForUser(req.auth), `./files`, fileId);
