@@ -1,5 +1,5 @@
 import express from 'express';
-import BucketsController from "./buckets/buckets-controller.mjs";
+import FilesController from "./files/files-controller.mjs";
 
 
 export default class CdnController {
@@ -14,7 +14,7 @@ export default class CdnController {
 
 		const cdnRouter = new express.Router();
 
-		await BucketsController.setup(cdnRouter);
+		await FilesController.setup(cdnRouter);
 
 		router.use(`/cdn`, cdnRouter);
 
