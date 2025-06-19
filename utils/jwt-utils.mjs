@@ -18,8 +18,8 @@ export function withTokenFromHeaderOrQuery(){
 		getToken(req){
 			if (req.headers?.authorization?.split?.(" ")?.[0] === 'Bearer')
 				return req.headers.authorization.split(" ")[1];
-			if (req.query?.token && req.query?.token != 'null')
-				return req.query.token;
+			if (req.query?.authorization && req.query?.authorization != 'null')
+				return req.query.authorization;
 			return null;
 		}
 	};

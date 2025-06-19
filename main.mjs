@@ -6,7 +6,6 @@ import Logger from "./utils/logger.mjs";
 import {ApiError, ResponseEnvelope} from "@potentii/rest-envelopes";
 import process from "node:process";
 import Joi from "joi";
-import cookieParser from "cookie-parser";
 
 
 process.on('uncaughtException', (err, origin) => {
@@ -34,21 +33,21 @@ const httpServer = createServer(app);
 
 app.use(cors({
 	credentials: true,
-	origin: process.env.CORS_ALLOW_ORIGINS.split(','),
+	origin: (origin, callback) => callback(null, true),
 }));
 
 
-app.use(cookieParser());
-app.use('*', (req, res, next) => {
-	if(req.cookies && req.headers &&
-		!Object.prototype.hasOwnProperty.call(req.headers, 'authorization') &&
-		Object.prototype.hasOwnProperty.call(req.cookies, 'token') &&
-		req.cookies.token.length > 0
-	) {
-		req.headers.authorization = 'Bearer ' + req.cookies.token.slice(0, req.cookies.token.length);
-	}
-	next();
-});
+// app.use(cookieParser());
+// app.use('*', (req, res, next) => {
+// 	if(req.cookies && req.headers &&
+// 		!Object.prototype.hasOwnProperty.call(req.headers, 'authorization') &&
+// 		Object.prototype.hasOwnProperty.call(req.cookies, 'token') &&
+// 		req.cookies.token.length > 0
+// 	) {
+// 		req.headers.authorization = 'Bearer ' + req.cookies.token.slice(0, req.cookies.token.length);
+// 	}
+// 	next();
+// });
 
 
 
@@ -74,8 +73,11 @@ app.use(`*`, (err, req, res, next) => {
 
 
 const port = process.env.PORT || 3443;
-const server = httpServer.listen(port, () => {
-	Logger.info(`SERVICE_STARTED`, `micro-cdn started @ http://localhost:${port}/`, { url:`http://localhost:${port}/`, port:port });
+const hostname = process.env.HOSTNAME || 'localhost';
+
+
+const server = httpServer.listen(port, hostname, () => {
+	Logger.info(`SERVICE_STARTED`, `micro-cdn started @ http://${hostname}:${port}/`, { url:`http://${hostname}:${port}/`, port:port });
 });
 
 process.on('beforeExit', code => {

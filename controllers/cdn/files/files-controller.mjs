@@ -6,7 +6,7 @@ import mime from "mime";
 import {ApiError, ApiErrorDetail, ResponseEnvelope} from "@potentii/rest-envelopes";
 import {getCdnPathForUser} from "../../../utils/cdn-folder-utils.mjs";
 import {expressjwt} from "express-jwt";
-import {withToken} from "../../../utils/jwt-utils.mjs";
+import {withToken, withTokenFromHeaderOrQuery} from "../../../utils/jwt-utils.mjs";
 import Joi from "joi";
 import {db} from "../../../repositories/db.mjs";
 import {FileEntity} from "../../../repositories/entities/file-entity.mjs";
@@ -26,7 +26,7 @@ export default class FilesController {
 		// router.use(express.urlencoded({ limit: '20gb', extended: true }));
 
 
-		router.use(expressjwt({ ...withToken() }));
+		router.use(expressjwt({ ...withToken(), ...withTokenFromHeaderOrQuery() }));
 
 
 		const FILE_ID_REGEX = /^[-_\w\/\\.]+$/i;
