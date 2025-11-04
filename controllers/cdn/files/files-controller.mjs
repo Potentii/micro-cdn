@@ -1,7 +1,6 @@
 import fs from 'fs/promises';
 import fsOld from 'fs';
 import path from 'path';
-import Logger from "../../../utils/logger.mjs";
 import mime from "mime";
 import {ApiError, ApiErrorDetail, ResponseEnvelope} from "@potentii/rest-envelopes";
 import {getCdnPathForUser} from "../../../utils/cdn-folder-utils.mjs";
@@ -11,6 +10,7 @@ import Joi from "joi";
 import {db} from "../../../repositories/db.mjs";
 import {FileEntity} from "../../../repositories/entities/file-entity.mjs";
 import {and, eq} from "drizzle-orm";
+import express from "express";
 
 
 export default class FilesController {
@@ -19,9 +19,11 @@ export default class FilesController {
 
 	/**
 	 *
-	 * @param {Router} router
+	 * @return {Promise<Router>}
 	 */
-	static async setup(router){
+	static async build(){
+
+		const router = express.Router();
 
 		// router.use(express.urlencoded({ limit: '20gb', extended: true }));
 
@@ -32,14 +34,17 @@ export default class FilesController {
 		const FILE_ID_REGEX = /^[-_\w\/\\.]+$/i;
 
 
-		router.get(`/files/*`, async (req, res, next) => {
-			const fileId = req.path.replace(/^\/files\//i, '');
-
+		router.get(`/files/*fileId`, async (req, res, next) => {
 			try{
+				const fileIdParts = req.params.fileId;
+				res.locals.logger.set({ fileIdParts: fileIdParts });
+				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
+				const fileId = path.join(...fileIdParts);
 
-				Joi.assert(fileId, Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId`));
+				const userLocation = req.auth.location;
+				res.locals.logger.set({ userLocation: userLocation });
 
-				const found = await db(req.auth.location)
+				const found = await db(userLocation)
 					.select()
 					.from(FileEntity)
 					.where(and(eq(FileEntity.id, fileId), eq(FileEntity.isDeleted, 'false')))
@@ -52,7 +57,7 @@ export default class FilesController {
 				}
 
 
-				const filePath = path.join(getCdnPathForUser(req.auth), `./files`, fileId);
+				const filePath = path.join(getCdnPathForUser(userLocation), `./files`, fileId);
 
 				const ext = path.extname(filePath).replace('.', '').toLowerCase();
 
@@ -92,7 +97,7 @@ export default class FilesController {
 
 
 				stream.on('open', () => {
-					Logger.info(`GET_FILE:READ_START`, `Started to read/stream a file`, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
+					res.locals.logger.info(`GET_FILE:READ_START`, `Started to read/stream a file`);
 					stream.pipe(res);
 				});
 				stream.on('error', err => {
@@ -103,69 +108,93 @@ export default class FilesController {
 						return;
 					}
 
-					Logger.error(`GET_FILE:READ_ERR`, `Error reading file`, err, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
+					res.locals.logger.error(`GET_FILE:READ_ERR`, `Error reading file`, err);
 					res.status(500).end();
 				});
 
 
 			} catch(err){
 				if(err.code === 'ENOENT'){
-					res.status(404)
-						.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
-						.end();
+					throw ApiError.builder()
+						.status(404)
+						.internalCode(`GET_FILE:NOT_FOUND`)
+						.code(`GET_FILE:NOT_FOUND`)
+						.message(`The file "${fileId}" could not be found`)
+						.cause(err)
+						.build();
 				} else{
-					Logger.error(`GET_FILE:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
-					res.status(500)
-						.json(ResponseEnvelope.withError(ApiError.create(`UNKNOWN_ERROR`, `Unknown error`, [])))
-						.end();
+					throw ApiError.builder()
+						.status(500)
+						.internalCode(`GET_FILE:UNKNOWN_ERR`)
+						.code(`GET_FILE:UNKNOWN_ERR`)
+						.message(`Unknown error`)
+						.cause(err)
+						.build();
 				}
 			}
 		});
 
 
-		router.delete(`/files/*`, async (req, res, next) => {
-			const fileId = req.path.replace(/^\/files\//i, '');
-
+		router.delete(`/files/*fileId`, async (req, res, next) => {
 			try{
+				const fileIdParts = req.params.fileId;
+				res.locals.logger.set({ fileIdParts: fileIdParts });
+				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
+				const fileId = path.join(...fileIdParts);
+
+				const userLocation = req.auth.location;
+				res.locals.logger.set({ userLocation: userLocation });
+
 				const now = new Date().getTime();
 
-				const updateResult = await db(req.auth.location)
+				const updateResult = await db(userLocation)
 					.update(FileEntity)
 					.set({ isDeleted: `true`, lastModifiedTs: now, deletedTs: now })
 					.where(eq(FileEntity.id, fileId))
 					.returning({ updatedId: FileEntity.id });
 
 				if(!updateResult?.updatedId) {
-					Logger.info(`DELETE_FILE:FILE_NOT_AVAILABLE`, `The file was already deleted or could not be found`, {rootPath: getCdnPathForUser(req.auth), fileId: fileId});
+					res.locals.logger.info(`DELETE_FILE:FILE_NOT_AVAILABLE`, `The file was already deleted or could not be found`);
 					return res.status(204).end();
 				}
 
-				Logger.info(`DELETE_FILE:FINISHED`, `Deleted existing file successfully`, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
+				res.locals.logger.info(`DELETE_FILE:FINISHED`, `Deleted existing file successfully`);
 
 				res.status(204).end();
 			} catch(err){
-				Logger.error(`DELETE_FILE:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
-				res.status(500)
-					.json(ResponseEnvelope.withError(ApiError.create(`UNKNOWN_ERROR`, `Unknown error`, [])))
-					.end();
+				throw ApiError.builder()
+					.status(500)
+					.internalCode(`DELETE_FILE:UNKNOWN_ERR`)
+					.code(`DELETE_FILE:UNKNOWN_ERR`)
+					.message(`Unknown error`)
+					.cause(err)
+					.build();
 			}
 		});
 
 
-		router.post(`/files/*`, async (req, res, next) => {
-			const fileId = req.path.replace(/^\/files\//i, '');
+		router.post(`/files/*fileId`, async (req, res, next) => {
 
 			try{
+				const fileIdParts = req.params.fileId;
+				res.locals.logger.set({ fileIdParts: fileIdParts });
+				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
+				const fileId = path.join(...fileIdParts);
+
 				Joi.assert(fileId, Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId`));
 
+				const userLocation = req.auth.location;
+				res.locals.logger.set({ userLocation: userLocation });
 
-				const filePath = path.join(getCdnPathForUser(req.auth), `./files`, fileId);
+				const cdnPathUser = getCdnPathForUser(userLocation);
+				const filePath = path.join(cdnPathUser, `./files`, fileId);
+				res.locals.logger.set({ cdnPathUser: cdnPathUser });
 
 
 				try{
 					const stat = await fs.stat(path.dirname(filePath));
 
-					const found = await db(req.auth.location)
+					const found = await db(userLocation)
 						.select()
 						.from(FileEntity)
 						.where(eq(FileEntity.id, fileId))
@@ -206,22 +235,30 @@ export default class FilesController {
 					deletedTs: null
 				};
 
-				await db(req.auth.location)
+				await db(userLocation)
 					.insert(FileEntity)
 					.values(file);
 
-				Logger.info(`CREATE_FILE:FINISHED`, `Created file successfully`, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
+				res.locals.logger.info(`CREATE_FILE:FINISHED`, `Created file successfully`);
 
 				return res.status(201)
 					.json(ResponseEnvelope.withData(file))
 					.end();
 			} catch(err){
-				Logger.error(`CREATE_FILE:UNKNOWN_ERR`, `Unknown error`, err, { rootPath:getCdnPathForUser(req.auth), fileId:fileId });
-				res.status(500)
-					.json(ResponseEnvelope.withError(ApiError.create(`UNKNOWN_ERROR`, `Unknown error`, [])))
-					.end();
+				throw ApiError.builder()
+					.status(500)
+					.internalCode(`CREATE_FILE:UNKNOWN_ERR`)
+					.code(`CREATE_FILE:UNKNOWN_ERR`)
+					.message(`Unknown error`)
+					.cause(err)
+					.build();
 			}
 		});
+
+
+
+
+		return router;
 	}
 }
 
