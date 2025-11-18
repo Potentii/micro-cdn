@@ -33,13 +33,26 @@ export default class FilesController {
 
 		const FILE_ID_REGEX = /^[-_\w\/\\.]+$/i;
 
+		/**
+		 * Extracts the fileId from the request parameters
+		 * @param req
+		 * @param res
+		 * @return {string}
+		 */
+		function extractFileId(req, res){
+			const fileIdParts = req.params.fileId;
+			res.locals.logger.set({ fileIdParts: fileIdParts });
+			Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
+			const fileId = path.join(...fileIdParts).replaceAll('\\', '/');
+			res.locals.logger.set({ fileId: fileId });
+			return fileId;
+		}
+
+
 
 		router.get(`/files/*fileId`, async (req, res, next) => {
 			try{
-				const fileIdParts = req.params.fileId;
-				res.locals.logger.set({ fileIdParts: fileIdParts });
-				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
-				const fileId = path.join(...fileIdParts);
+				const fileId = extractFileId(req, res);
 
 				const userLocation = req.auth.location;
 				res.locals.logger.set({ userLocation: userLocation });
@@ -51,9 +64,16 @@ export default class FilesController {
 					.limit(1);
 
 				if(!found?.length){
-					return res.status(404)
-						.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
-						.end();
+					throw ApiError.builder()
+						.status(404)
+						.internalCode(`GET_FILE:NOT_FOUND_ENTITY`)
+						.code(`GET_FILE:NOT_FOUND`)
+						.message(`The file "${fileId}" could not be found`)
+						.build();
+					//
+					// return res.status(404)
+					// 	.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
+					// 	.end();
 				}
 
 
@@ -96,24 +116,50 @@ export default class FilesController {
 
 
 
-				stream.on('open', () => {
-					res.locals.logger.info(`GET_FILE:READ_START`, `Started to read/stream a file`);
-					stream.pipe(res);
-				});
-				stream.on('error', err => {
-					if(err.code === 'ENOENT'){
-						res.status(404)
-							.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
-							.end();
-						return;
-					}
+				new Promise((resolve, reject) => {
 
-					res.locals.logger.error(`GET_FILE:READ_ERR`, `Error reading file`, err);
-					res.status(500).end();
+					stream.on('open', () => {
+						res.locals.logger.info(`GET_FILE:READ_START`, `Started to read/stream a file`);
+						stream.pipe(res);
+					});
+					stream.on('close', code => {
+						res.locals.logger.info(`GET_FILE:READ_CLOSED`, `Closed read/stream of file`, { code: code });
+					});
+					stream.on('end', () => {
+						res.locals.logger.info(`GET_FILE:READ_END`, `Finished reading/streaming file`);
+						resolve();
+					});
+					stream.on('error', err => {
+						return reject(err);
+						// if(err.code === 'ENOENT'){
+						// 	return reject(
+						// 		throw ApiError.builder()
+						// 			.status(404)
+						// 			.internalCode(`GET_FILE:NOT_FOUND_STREAM`)
+						// 			.code(`GET_FILE:NOT_FOUND`)
+						// 			.message(`The file "${fileId}" could not be found`)
+						// 			.cause(err)
+						// 			.build()
+						// 	);
+						// 	// res.status(404)
+						// 	// 	.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
+						// 	// 	.end();
+						// 	// return;
+						// }
+						//
+						// res.locals.logger.error(`GET_FILE:READ_ERR`, `Error reading file`, err);
+						// res.status(500).end();
+					});
+
 				});
+
 
 
 			} catch(err){
+				if (err instanceof ApiError)
+					throw err;
+				if (err instanceof Joi.ValidationError)
+					throw err;
 				if(err.code === 'ENOENT'){
 					throw ApiError.builder()
 						.status(404)
@@ -137,10 +183,7 @@ export default class FilesController {
 
 		router.delete(`/files/*fileId`, async (req, res, next) => {
 			try{
-				const fileIdParts = req.params.fileId;
-				res.locals.logger.set({ fileIdParts: fileIdParts });
-				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
-				const fileId = path.join(...fileIdParts);
+				const fileId = extractFileId(req, res);
 
 				const userLocation = req.auth.location;
 				res.locals.logger.set({ userLocation: userLocation });
@@ -162,6 +205,10 @@ export default class FilesController {
 
 				res.status(204).end();
 			} catch(err){
+				if (err instanceof ApiError)
+					throw err;
+				if (err instanceof Joi.ValidationError)
+					throw err;
 				throw ApiError.builder()
 					.status(500)
 					.internalCode(`DELETE_FILE:UNKNOWN_ERR`)
@@ -176,10 +223,7 @@ export default class FilesController {
 		router.post(`/files/*fileId`, async (req, res, next) => {
 
 			try{
-				const fileIdParts = req.params.fileId;
-				res.locals.logger.set({ fileIdParts: fileIdParts });
-				Joi.assert(fileIdParts, Joi.array().required().items(Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId[]`)).min(1).label(`$path.fileId`));
-				const fileId = path.join(...fileIdParts);
+				const fileId = extractFileId(req, res);
 
 				Joi.assert(fileId, Joi.string().required().regex(FILE_ID_REGEX).label(`$path.fileId`));
 
@@ -245,6 +289,10 @@ export default class FilesController {
 					.json(ResponseEnvelope.withData(file))
 					.end();
 			} catch(err){
+				if (err instanceof ApiError)
+					throw err;
+				if (err instanceof Joi.ValidationError)
+					throw err;
 				throw ApiError.builder()
 					.status(500)
 					.internalCode(`CREATE_FILE:UNKNOWN_ERR`)
