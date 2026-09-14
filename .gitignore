@@ -135,3 +135,12 @@ fabric.properties
 /.parcel-cache/
 /packages/view/dist/
 /out
+
+
+certs
+
+/.idea/queries/
+/.idea/data_source_mapping.xml
+/.idea/sqldialects.xml
+
+/.idea/dataSources.xml

@@ -2,14 +2,14 @@ import fs from 'fs/promises';
 import fsOld from 'fs';
 import path from 'path';
 import mime from "mime";
-import {ApiError, ApiErrorDetail, ResponseEnvelope} from "@potentii/rest-envelopes";
+import {ApiError, ResponseEnvelope} from "@potentii/rest-envelopes";
 import {getCdnPathForUser} from "../../../utils/cdn-folder-utils.mjs";
 import {expressjwt} from "express-jwt";
 import {withToken, withTokenFromHeaderOrQuery} from "../../../utils/jwt-utils.mjs";
 import Joi from "joi";
-import {db} from "../../../repositories/db.mjs";
-import {FileEntity} from "../../../repositories/entities/file-entity.mjs";
-import {and, eq} from "drizzle-orm";
+// import {db} from "../../../repositories/db.mjs";
+// import {FileEntity} from "../../../repositories/entities/file-entity.mjs";
+// import {and, eq} from "drizzle-orm";
 import express from "express";
 
 
@@ -51,30 +51,31 @@ export default class FilesController {
 
 
 		router.get(`/files/*fileId`, async (req, res, next) => {
+			let fileId;
 			try{
-				const fileId = extractFileId(req, res);
+				fileId = extractFileId(req, res);
 
 				const userLocation = req.auth.location;
 				res.locals.logger.set({ userLocation: userLocation });
 
-				const found = await db(userLocation)
-					.select()
-					.from(FileEntity)
-					.where(and(eq(FileEntity.id, fileId), eq(FileEntity.isDeleted, 'false')))
-					.limit(1);
-
-				if(!found?.length){
-					throw ApiError.builder()
-						.status(404)
-						.internalCode(`GET_FILE:NOT_FOUND_ENTITY`)
-						.code(`GET_FILE:NOT_FOUND`)
-						.message(`The file "${fileId}" could not be found`)
-						.build();
-					//
-					// return res.status(404)
-					// 	.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
-					// 	.end();
-				}
+				// const found = await db(userLocation)
+				// 	.select()
+				// 	.from(FileEntity)
+				// 	.where(and(eq(FileEntity.id, fileId), eq(FileEntity.isDeleted, 'false')))
+				// 	.limit(1);
+				//
+				// if(!found?.length){
+				// 	throw ApiError.builder()
+				// 		.status(404)
+				// 		.internalCode(`GET_FILE:NOT_FOUND_ENTITY`)
+				// 		.code(`GET_FILE:NOT_FOUND`)
+				// 		.message(`The file "${fileId}" could not be found`)
+				// 		.build();
+				// 	//
+				// 	// return res.status(404)
+				// 	// 	.json(ResponseEnvelope.withError(ApiError.create(`NOT_FOUND`, `The file "${fileId}" could not be found`, [])))
+				// 	// 	.end();
+				// }
 
 
 				const filePath = path.join(getCdnPathForUser(userLocation), `./files`, fileId);
@@ -83,8 +84,11 @@ export default class FilesController {
 
 				const mimeType = mime.getType(ext);
 
+
+
+
 				let stream;
-				if(mimeType.startsWith('video/')){
+				if(mimeType.startsWith('video/') && req.headers?.range?.trim?.().length){
 
 
 					// *If it's video/streamable:
@@ -188,18 +192,20 @@ export default class FilesController {
 				const userLocation = req.auth.location;
 				res.locals.logger.set({ userLocation: userLocation });
 
-				const now = new Date().getTime();
+				// TODO move file from '/files' to '/trash' with an unique suffix (to support multiple files being deleted with same id);
 
-				const updateResult = await db(userLocation)
-					.update(FileEntity)
-					.set({ isDeleted: `true`, lastModifiedTs: now, deletedTs: now })
-					.where(eq(FileEntity.id, fileId))
-					.returning({ updatedId: FileEntity.id });
+				// const now = new Date().getTime();
 
-				if(!updateResult?.updatedId) {
-					res.locals.logger.info(`DELETE_FILE:FILE_NOT_AVAILABLE`, `The file was already deleted or could not be found`);
-					return res.status(204).end();
-				}
+				// const updateResult = await db(userLocation)
+				// 	.update(FileEntity)
+				// 	.set({ isDeleted: `true`, lastModifiedTs: now, deletedTs: now })
+				// 	.where(eq(FileEntity.id, fileId))
+				// 	.returning({ updatedId: FileEntity.id });
+				//
+				// if(!updateResult?.updatedId) {
+				// 	res.locals.logger.info(`DELETE_FILE:FILE_NOT_AVAILABLE`, `The file was already deleted or could not be found`);
+				// 	return res.status(204).end();
+				// }
 
 				res.locals.logger.info(`DELETE_FILE:FINISHED`, `Deleted existing file successfully`);
 
@@ -238,17 +244,17 @@ export default class FilesController {
 				try{
 					const stat = await fs.stat(path.dirname(filePath));
 
-					const found = await db(userLocation)
-						.select()
-						.from(FileEntity)
-						.where(eq(FileEntity.id, fileId))
-						.limit(1);
-
-					if(found?.length){
-						return res.status(422)
-							.json(ResponseEnvelope.withError(ApiError.create(`INVALID_REQUEST`, `The request is not valid`, [ApiErrorDetail.create(`ALREADY_EXISTS`, `The file already exists`, `$path.fileId`, fileId)])))
-							.end();
-					}
+					// const found = await db(userLocation)
+					// 	.select()
+					// 	.from(FileEntity)
+					// 	.where(eq(FileEntity.id, fileId))
+					// 	.limit(1);
+					//
+					// if(found?.length){
+					// 	return res.status(422)
+					// 		.json(ResponseEnvelope.withError(ApiError.create(`INVALID_REQUEST`, `The request is not valid`, [ApiErrorDetail.create(`ALREADY_EXISTS`, `The file already exists`, `$path.fileId`, fileId)])))
+					// 		.end();
+					// }
 
 				} catch (err) {
 					if(err.code === 'ENOENT'){
@@ -271,22 +277,24 @@ export default class FilesController {
 
 				const now = new Date().getTime();
 
-				const file = {
-					id: fileId,
-					isDeleted: `false`,
-					creationTs: now,
-					lastModifiedTs: now,
-					deletedTs: null
-				};
-
-				await db(userLocation)
-					.insert(FileEntity)
-					.values(file);
+				// const file = {
+				// 	id: fileId,
+				// 	isDeleted: `false`,
+				// 	creationTs: now,
+				// 	lastModifiedTs: now,
+				// 	deletedTs: null
+				// };
+				//
+				// await db(userLocation)
+				// 	.insert(FileEntity)
+				// 	.values(file);
 
 				res.locals.logger.info(`CREATE_FILE:FINISHED`, `Created file successfully`);
 
 				return res.status(201)
-					.json(ResponseEnvelope.withData(file))
+					.json(ResponseEnvelope.withData({
+						id: fileId,
+					}))
 					.end();
 			} catch(err){
 				if (err instanceof ApiError)
