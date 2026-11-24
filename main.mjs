@@ -29,8 +29,11 @@ Logger.info(`APP:SETUP_STARTED`, `Application setup starting`);
 
 
 // *Validating the environment:
-Joi.assert(process.env.PORT, Joi.number().required().min(0).label('$env.PORT'));
+Joi.assert(process.env.HTTPS_PORT, Joi.number().required().min(0).label('$env.HTTPS_PORT'));
+Joi.assert(process.env.HTTP_PORT, Joi.number().required().min(0).label('$env.HTTP_PORT'));
 Joi.assert(process.env.CORS_ALLOW_ORIGINS, Joi.string().required().label('$env.CORS_ALLOW_ORIGINS'));
+Joi.assert(process.env.FFMPEG_PATH, Joi.string().required().label('$env.FFMPEG_PATH'));
+Joi.assert(process.env.FFPROBE_PATH, Joi.string().required().label('$env.FFPROBE_PATH'));
 Joi.assert(process.env.TOKEN_PUBLIC_KEY, Joi.string().required().label('$env.TOKEN_PUBLIC_KEY'));
 
 if(!process.env.TOKEN_PUBLIC_KEY.startsWith('-----BEGIN PUBLIC KEY-----'))

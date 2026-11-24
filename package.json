@@ -15,17 +15,15 @@
 	},
 	"homepage": "https://github.com/Potentii/micro-cdn",
 	"dependencies": {
-		"@potentii/logger-js-pino": "1.1.2",
-		"@potentii/rest-envelopes": "1.4.0",
-		"@potentii/type-utils": "1.0.1",
-		"cors": "2.8.5",
-		"express": "5.1.0",
+		"@potentii/logger-js-pino": "1.1.3",
+		"@potentii/rest-envelopes": "1.4.1",
+		"fluent-ffmpeg": "2.1.3",
+		"cors": "2.8.6",
+		"express": "5.3.0",
 		"express-jwt": "8.5.1",
 		"cookie-parser": "1.4.7",
-		"drizzle-orm": "0.44.7",
-		"better-sqlite3": "12.4.1",
-		"joi": "18.0.1",
-		"mime": "4.1.0",
-		"uuid": "13.0.0"
+		"joi": "18.3.2",
+		"mime": "4.1.2",
+		"uuid": "14.0.3"
 	}
 }

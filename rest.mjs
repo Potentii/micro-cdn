@@ -1,6 +1,6 @@
 import https from 'https';
+import http from 'http';
 import express from 'express';
-// import 'express-async-errors';
 import cors from 'cors';
 import Logger from "@potentii/logger-js-pino";
 import NotFoundMiddleware from "./middlewares/not-found-middleware.mjs";
@@ -16,7 +16,8 @@ export default class Rest {
 	static async setup() {
 		Logger.info(`REST:SETUP_STARTED`, `Rest APIs setup started`);
 
-		const port = process.env.PORT;
+		const httpsPort = Number(process.env.HTTPS_PORT);
+		const httpPort = Number(process.env.HTTP_PORT);
 		const hostname = process.env.HOSTNAME || 'localhost';
 
 
@@ -29,7 +30,8 @@ export default class Rest {
 
 		// *Configuring express middlewares:
 		const app = express();
-		const srv = https.createServer(options, app);
+		const httpsSrv = https.createServer(options, app);
+		const httpSrv = http.createServer(app);
 
 		// app.use(cors());
 		app.use(cors({
@@ -65,9 +67,14 @@ export default class Rest {
 
 
 
+		// *Starting the HTTPS server:
+		httpsSrv.listen(httpsPort, hostname, err => {
+			Logger.info(`REST:SETUP_COMPLETED`, `Rest APIs started @ https://${hostname}:${httpsPort}`, {href: `https://${hostname}:${httpsPort}`});
+		});
+
 		// *Starting the HTTP server:
-		srv.listen(port, hostname, err => {
-			Logger.info(`REST:SETUP_COMPLETED`, `Rest APIs started @ https://${hostname}:${port}`, {href: `https://${hostname}:${port}`});
+		httpSrv.listen(httpPort, hostname, err => {
+			Logger.info(`REST:SETUP_COMPLETED`, `Rest APIs started @ http://${hostname}:${httpPort}`, {href: `https://${hostname}:${httpPort}`});
 		});
 
 	}
