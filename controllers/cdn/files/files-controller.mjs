@@ -125,12 +125,12 @@ async function getFileMetadata(filePath, fields, logger) {
 	let isVrVideo = undefined;
 	let hash = undefined;
 
-	if(fields.has('type') || fields.has('isPlaybackMedia')){
+	if(fields.has('type') || fields.has('isPlaybackMedia') || fields.has('videoLengthSeconds') || fields.has('sizeBytes') || fields.has('isVrVideo')){
 		type = getType(path.extname(filePath));
 		logger.set({type: type});
 
 		if(fields.has('isPlaybackMedia') || fields.has('videoLengthSeconds') || fields.has('sizeBytes') || fields.has('isVrVideo')){
-			const isPlaybackMedia = type === 'video' || type === 'video-stream';
+			isPlaybackMedia = type === 'video' || type === 'video-stream';
 			logger.set({isPlaybackMedia: isPlaybackMedia});
 
 
@@ -456,7 +456,7 @@ export default class FilesController {
 				Joi.assert(copyFromFileId, Joi.string().optional().allow(null).label(`$headers.X-Copy-From`));
 				res.locals.logger.set({ copyFromFileId: copyFromFileId });
 
-				const copyFromPath = copyFromFileId.length ? getFilePathFromFileId(req.auth.location, copyFromFileId) : null;
+				const copyFromPath = copyFromFileId?.length ? getFilePathFromFileId(req.auth.location, copyFromFileId) : null;
 				res.locals.logger.set({ copyFromPath: copyFromPath });
 
 
